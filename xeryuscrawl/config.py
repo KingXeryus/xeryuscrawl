@@ -4,8 +4,9 @@
   XERYUSCRAWL_PORT          the optional REST service's port on 127.0.0.1 (default 18102)
 
   The AI model, for answers, extraction and summaries (optional: crawling, search and deep research work without one):
-  XERYUSCRAWL_LLM_PROVIDER  local (an OpenAI-compatible server on this computer: Ollama, LM Studio, llama.cpp), openai,
-                            anthropic, gemini, openrouter, groq or deepseek (default local)
+  XERYUSCRAWL_LLM_PROVIDER  a cloud provider with your own API key: openrouter, openai, anthropic, gemini, groq or deepseek;
+                            or local, a model server on this computer (Ollama, LM Studio, llama.cpp). Not set until
+                            `xeryuscrawl setup`, which asks for it
   XERYUSCRAWL_LLM_KEY       your own API key for a cloud provider
   XERYUSCRAWL_LLM_URL       the server's address (each provider has its default; local: http://127.0.0.1:11434, Ollama)
   XERYUSCRAWL_LLM_MODEL     the model's name (each provider has its default)
@@ -54,12 +55,12 @@ def _get(name: str, default=None):
 SECRET_FILE = Path(_get("XERYUSCRAWL_SECRET_FILE") or HOME / "crawl.secret")
 PORT = int(_get("XERYUSCRAWL_PORT") or 18102)
 URL = f"http://127.0.0.1:{PORT}"
-LLM_PROVIDER = (_get("XERYUSCRAWL_LLM_PROVIDER") or "local").lower()
-if LLM_PROVIDER not in PROVIDERS:
+LLM_PROVIDER = (_get("XERYUSCRAWL_LLM_PROVIDER") or "").lower()  # "" until setup: the AI features then ask for a key
+if LLM_PROVIDER and LLM_PROVIDER not in PROVIDERS:
     raise SystemExit(f"XERYUSCRAWL_LLM_PROVIDER must be one of: {', '.join(PROVIDERS)}")
 LLM_KEY = _get("XERYUSCRAWL_LLM_KEY") or ""
-LLM_URL = (_get("XERYUSCRAWL_LLM_URL") or PROVIDERS[LLM_PROVIDER][0]).rstrip("/")
-LLM_MODEL = _get("XERYUSCRAWL_LLM_MODEL") or PROVIDERS[LLM_PROVIDER][1]
+LLM_URL = (_get("XERYUSCRAWL_LLM_URL") or PROVIDERS.get(LLM_PROVIDER, ("",))[0]).rstrip("/")
+LLM_MODEL = _get("XERYUSCRAWL_LLM_MODEL") or PROVIDERS.get(LLM_PROVIDER, ("", ""))[1]
 SEARCH = (_get("XERYUSCRAWL_SEARCH") or "searxng").lower()
 SEARXNG = (_get("XERYUSCRAWL_SEARXNG") or "http://127.0.0.1:8888").rstrip("/")
 BRAVE_KEY = _get("XERYUSCRAWL_BRAVE_KEY") or ""

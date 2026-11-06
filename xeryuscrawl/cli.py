@@ -27,6 +27,9 @@ SEARXNG_GIT = "https://github.com/searxng/searxng"
 SEARXNG_IMAGE = "docker.io/searxng/searxng:latest"
 CONTAINER = "xeryuscrawl-searxng"
 SEARCH_PORT = 8888
+MODEL_QUESTION = """XeryusCrawl's answers, AI extraction and summaries use an AI model with your own API key (crawling, search
+and deep research work without one). Providers: {}.
+Or 'local' for a model server on this computer, or 'none' to skip."""
 SHARE_QUESTION = """
 Help improve myMAK.ai's AI models? If yes, the public web passages your research finds (with their web addresses) are
 shared with myMAK.ai. Never your questions, searches, answers, keys or files. Details: TERMS.md. You can change this any
@@ -55,7 +58,8 @@ def _ask(question: str, default: str = "", secret: bool = False) -> str:
 
 
 def setup(a) -> int:
-    provider = a.llm or _ask("AI model: none, local, " + ", ".join(p for p in config.PROVIDERS if p != "local"), "none").lower()
+    print(MODEL_QUESTION.format(", ".join(p for p in config.PROVIDERS if p != "local")))
+    provider = a.llm or _ask("AI provider", "openrouter").lower()
     values: dict = {}
     if provider != "none":
         if provider not in config.PROVIDERS:
@@ -65,7 +69,7 @@ def setup(a) -> int:
         if provider == "local":
             values["XERYUSCRAWL_LLM_URL"] = a.llm_url or _ask("Local model server", config.PROVIDERS["local"][0])
         else:
-            values["XERYUSCRAWL_LLM_KEY"] = a.llm_key or _ask(f"Your {provider} API key (hidden)", secret=True)
+            values["XERYUSCRAWL_LLM_KEY"] = a.llm_key or _ask(f"Your {provider} API key (hidden; get one from the provider's site)", secret=True)
             if not values["XERYUSCRAWL_LLM_KEY"]:
                 print("No key given; the AI features stay off until you add one.")
         values["XERYUSCRAWL_LLM_MODEL"] = a.llm_model or _ask("Model", config.PROVIDERS[provider][1])
@@ -166,7 +170,8 @@ def status(a=None) -> int:
     from .smart import search
     mask = lambda k: (k[:4] + "..." + k[-2:]) if k else "(none)"  # noqa: E731
     print(f"Home:    {config.HOME}")
-    print(f"Model:   {config.LLM_PROVIDER} | {config.LLM_MODEL} | {config.LLM_URL} | key {mask(config.LLM_KEY)}")
+    print(f"Model:   {config.LLM_PROVIDER} | {config.LLM_MODEL} | {config.LLM_URL} | key {mask(config.LLM_KEY)}" if config.LLM_PROVIDER
+          else "Model:   not set up (xeryuscrawl setup)")
     print(f"Sharing: {'on' if config.SHARE else 'off'}")
     print(f"Search:  {config.SEARCH} | " + (f"key {mask(config.BRAVE_KEY)}" if config.SEARCH == "brave" else config.SEARXNG))
     try:

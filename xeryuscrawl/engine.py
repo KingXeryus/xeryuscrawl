@@ -29,6 +29,9 @@ MOBILE_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHT
 def local_llm(messages: list, model: str | None = None, http: httpx.Client | None = None) -> str:
     """The configured model (config.py): a local OpenAI-compatible server, or a cloud provider with the user's own key."""
     provider, base = config.LLM_PROVIDER, config.LLM_URL
+    if not provider:
+        raise ValueError("no AI model is set up: run `xeryuscrawl setup` and add your API key (OpenRouter, OpenAI, Anthropic, "
+                         "Gemini, Groq or DeepSeek), or choose a model server on this computer")
     if provider != "local" and not config.LLM_KEY:
         raise ValueError(f"set your {provider} API key first (xeryuscrawl setup, or XERYUSCRAWL_LLM_KEY)")
     body = {"model": model or config.LLM_MODEL, "messages": messages}

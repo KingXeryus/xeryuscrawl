@@ -21,9 +21,9 @@ client) and for your own scripts.
   several angles, reads the results, follows the best links, searches again for what is still thin, and returns numbered
   sources with the passages that answer it.
 
-Crawling, scraping, search and deep research need no AI model. Answers, AI extraction, summaries and the agent use the model
-you choose: a local one (Ollama, LM Studio, llama.cpp) or a cloud provider with your own API key (OpenAI, Anthropic, Google
-Gemini, OpenRouter, Groq, DeepSeek).
+Crawling, scraping, search and deep research need no AI model. Answers, AI extraction, summaries and the agent use a cloud
+AI provider with your own API key (OpenRouter, OpenAI, Anthropic, Google Gemini, Groq or DeepSeek), which `xeryuscrawl setup`
+asks for; a model server on your own computer (Ollama, LM Studio, llama.cpp) works too.
 
 ## Safety
 
@@ -44,7 +44,7 @@ xeryuscrawl install-browser
 xeryuscrawl setup
 ```
 
-`setup` asks which AI model to use (none, local, or a cloud provider with your own key) and which search engine:
+`setup` asks for your AI provider and API key (or a local model server, or none) and which search engine:
 
 - **SearXNG** (free, on your computer): `xeryuscrawl install-search` sets it up with Docker if you have it, or downloads it from
   [SearXNG's own repository](https://github.com/searxng/searxng) on Linux and macOS (then `xeryuscrawl start-search`).
@@ -80,10 +80,10 @@ To have searches, look-ups, page reading and research always use it, copy `skill
 | Variable | Default | What |
 | --- | --- | --- |
 | `XERYUSCRAWL_HOME` | `~/.xeryuscrawl` | settings, cache, jobs, sessions and the files folder |
-| `XERYUSCRAWL_LLM_PROVIDER` | `local` | `local`, `openai`, `anthropic`, `gemini`, `openrouter`, `groq` or `deepseek` |
+| `XERYUSCRAWL_LLM_PROVIDER` | set by setup | `openrouter`, `openai`, `anthropic`, `gemini`, `groq`, `deepseek` or `local` |
 | `XERYUSCRAWL_LLM_KEY` | | your API key for a cloud provider |
 | `XERYUSCRAWL_LLM_MODEL` | per provider | the model's name |
-| `XERYUSCRAWL_LLM_URL` | per provider | the server's address (local: `http://127.0.0.1:11434`) |
+| `XERYUSCRAWL_LLM_URL` | per provider | the server's address (local: `http://127.0.0.1:11434`, Ollama) |
 | `XERYUSCRAWL_SEARCH` | `searxng` | `searxng` or `brave` |
 | `XERYUSCRAWL_SEARXNG` | `http://127.0.0.1:8888` | your SearXNG |
 | `XERYUSCRAWL_BRAVE_KEY` | | your Brave Search API key |
