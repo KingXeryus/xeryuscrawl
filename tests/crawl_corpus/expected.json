@@ -1,0 +1,7 @@
+{
+ "static.html": {"keep": ["The oud is a short-neck, fretless lute", "eleven strings", "C, G, D, A, F and C", "| 1 | C4 |", "slide into the quarter tones"],
+                 "drop": ["Accept all cookies", "Ten best guitars", "All rights reserved", "Piano"]},
+ "malformed.html": {"keep": ["Maqam Rast starts on C", "Its lower jins is Jins Rast", "Ghammaz: G", "father of the maqamat & is very common"],
+                    "drop": ["BUY NOW", "footer text here"]},
+ "js.html": {"keep": ["A nawba is a suite in one mode", "Morocco, Algeria and Tunisia"], "drop": ["enable JavaScript"]}
+}

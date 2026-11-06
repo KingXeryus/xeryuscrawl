@@ -1,0 +1,29 @@
+[project]
+name = "xeryuscrawl"
+version = "0.1.0"
+description = "A local web crawler and deep-research tool for coding agents (MCP) and scripts (REST): pages to clean Markdown, site maps and crawls, data extraction, and research with numbered sources."
+readme = "README.md"
+license = { file = "LICENSE.md" }
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28",
+    "lxml>=6.0",
+    "playwright>=1.50",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "mcp>=2.3,<3",
+]
+
+[project.scripts]
+xeryuscrawl = "xeryuscrawl.serve:main"
+xeryuscrawl-mcp = "xeryuscrawl.mcp_server:main"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["xeryuscrawl"]

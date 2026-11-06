@@ -1,0 +1,6 @@
+{
+ "about": "Recorded extraction scores: (kept + dropped) / 2 per page and format. A change may only keep or raise them.",
+ "static.html": {"markdown": 1.0, "fit_markdown": 1.0},
+ "malformed.html": {"markdown": 1.0, "fit_markdown": 1.0},
+ "js.html": {"markdown": 1.0, "fit_markdown": 1.0}
+}
