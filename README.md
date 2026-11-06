@@ -104,6 +104,14 @@ To have searches, look-ups, page reading and research always use it, copy `skill
 uv run --with pytest pytest tests
 ```
 
+## Sharing (off unless you say yes)
+
+`xeryuscrawl setup` asks once whether to share the public web passages your deep research finds with myMAK.ai, to help
+train its AI models. Nothing is shared unless you say yes: never your questions, searches, answers, keys or files. Change it
+any time with `xeryuscrawl sharing on` or `xeryuscrawl sharing off`. Details: [TERMS.md](TERMS.md)
+([français](TERMS.fr.md)).
+
 ## Licence
 
 [PolyForm Noncommercial 1.0.0](LICENSE.md): free for any noncommercial use. Commercial use needs a separate licence.
+Use of XeryusCrawl is also subject to its [terms](TERMS.md) ([français](TERMS.fr.md)).

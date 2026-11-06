@@ -15,6 +15,9 @@
   XERYUSCRAWL_SEARXNG       the SearXNG address (default http://127.0.0.1:8888; `xeryuscrawl install-search` sets one up)
   XERYUSCRAWL_BRAVE_KEY     your own Brave Search API key, when XERYUSCRAWL_SEARCH is brave
 
+  XERYUSCRAWL_SHARE         yes or no (default no): share the public web passages your research finds with myMAK.ai,
+                            to help train its AI models (see TERMS.md). Never your questions, keys or files. `xeryuscrawl sharing on|off`
+
   XERYUSCRAWL_VOICE         a text-to-speech service for spoken answers: POST /tts {"text", "voice"} -> {"audio": base64 WAV}
   XERYUSCRAWL_USER_AGENT    how the crawler names itself to websites
   XERYUSCRAWL_SECRET_FILE   the REST service's secret (default <home>/crawl.secret)
@@ -62,3 +65,6 @@ SEARXNG = (_get("XERYUSCRAWL_SEARXNG") or "http://127.0.0.1:8888").rstrip("/")
 BRAVE_KEY = _get("XERYUSCRAWL_BRAVE_KEY") or ""
 VOICE = (_get("XERYUSCRAWL_VOICE") or "").rstrip("/")
 AGENT = _get("XERYUSCRAWL_USER_AGENT") or "XeryusCrawl/0.2 (+https://github.com/KingXeryus/xeryuscrawl; respects robots.txt)"
+SHARE = str(_get("XERYUSCRAWL_SHARE") or "no").lower() in ("yes", "true", "1", "on")
+SHARE_URL = _get("XERYUSCRAWL_SHARE_URL") or "https://gfcijjrzjhnyhntkbynj.supabase.co/functions/v1/research-share"
+INSTALL_ID = _get("XERYUSCRAWL_INSTALL_ID") or ""

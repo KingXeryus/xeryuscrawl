@@ -165,3 +165,26 @@ def test_setup_saves_keys_and_status_hides_them(tmp_path):
     assert saved["XERYUSCRAWL_LLM_PROVIDER"] == "anthropic" and saved["XERYUSCRAWL_LLM_MODEL"] and saved["XERYUSCRAWL_BRAVE_KEY"] == "BSA-secret-9"
     out = subprocess.run([sys.executable, "-m", mod, "status"], env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120).stdout
     assert "sk-ant-secret-123" not in out and "BSA-secret-9" not in out and "anthropic" in out
+
+
+def test_sharing_is_off_by_default_and_only_public_passages_leave_when_on(tmp_path, monkeypatch):
+    from xeryuscrawl import share
+    monkeypatch.setattr(config, "HOME", tmp_path)
+    sources = [{"n": 1, "url": "https://public.test/oud", "title": "Oud"}]
+    passages = [{"source": 1, "text": "The oud has eleven strings. Write to me at someone@example.com or call +1 905 555 1234 for lessons on maqam."}]
+    monkeypatch.setattr(config, "SHARE", False)
+    monkeypatch.setattr(config, "INSTALL_ID", "")
+    assert share.keep(passages, sources) == 0 and not (tmp_path / "share").exists()
+    monkeypatch.setattr(config, "SHARE", True)
+    monkeypatch.setattr(config, "INSTALL_ID", "8a4f1c2e-1111-4222-8333-944455556666")
+    assert share.keep(passages, sources) == 1
+    sent = []
+
+    def handle(req):
+        sent.append(json.loads(req.content))
+        return httpx.Response(200, json={"accepted": 1})
+    assert share.send(httpx.Client(transport=httpx.MockTransport(handle))) == 1
+    body = sent[0]
+    assert set(body) == {"install", "passages"} and set(body["passages"][0]) == {"url", "title", "text"}
+    assert "someone@example.com" not in body["passages"][0]["text"] and "[email]" in body["passages"][0]["text"] and "[phone]" in body["passages"][0]["text"]
+    assert share.send(httpx.Client(transport=httpx.MockTransport(handle))) == 0  # at most once a day
