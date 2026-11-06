@@ -86,12 +86,23 @@ def _is_chrome(n: Node) -> bool:
 
 
 def main_node(root: Node) -> Node:
-    """The page's main content: <main> or the <article> with the most text, else <body>."""
-    for tag in ("main", "article"):
-        found = sorted(root.find_all(tag), key=lambda n: len(n.text()), reverse=True)
-        if found and len(found[0].text().strip()) > 200:
-            return found[0]
-    return next(root.find_all("body"), root)
+    """The page's main content: <main>; else the one <article> that holds most of the page's text; else <body> (a listing
+    page, like a news front page, has many articles: all of them are the content)."""
+    body = next(root.find_all("body"), root)
+    mains = sorted(root.find_all("main"), key=lambda n: len(n.text()), reverse=True)
+    if mains and len(mains[0].text().strip()) > 200:
+        return mains[0]
+    arts = [a for a in root.find_all("article") if len(a.text().strip()) > 200]
+    top = [a for a in arts if not any(p in arts for p in _ancestors(a))]  # outermost articles only
+    if len(top) == 1:
+        return top[0]
+    return body
+
+
+def _ancestors(n: Node):
+    while n.parent is not None:
+        n = n.parent
+        yield n
 
 
 def _inline(s: str) -> str:

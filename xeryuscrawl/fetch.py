@@ -49,6 +49,11 @@ class Blocked(Exception):
     """A page XeryusCrawl won't read: home-network address, robots.txt, login, captcha or paywall. The message is plain English."""
 
 
+class Refused(Blocked):
+    """Plain HTTP was turned away or timed out; an ordinary browser may still get the page (no evasion: the same name and
+    rules), so the engine tries one before giving up."""
+
+
 @dataclass
 class Page:
     url: str
@@ -62,7 +67,7 @@ class Page:
 
 class Fetcher:
     def __init__(self, http: httpx.Client | None = None, guard=check_url, pace: float = 1.0, robots: bool = True, clock=time.monotonic, sleep=time.sleep):
-        self.http = http or httpx.Client(timeout=30, headers={"User-Agent": AGENT}, follow_redirects=False)
+        self.http = http or httpx.Client(timeout=httpx.Timeout(20, connect=10), headers={"User-Agent": AGENT}, follow_redirects=False)
         self.guard, self.pace, self.robots, self.clock, self.sleep = guard, pace, robots, clock, sleep
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
         self.host_pace: dict[str, float] = {}  # a crawl's own delay for one site
@@ -116,7 +121,8 @@ class Fetcher:
             host = urlparse(url).netloc
             rules = self._robots.get(f"{urlparse(url).scheme}://{host}") if check_robots else None
             delay = max(self.pace, self.host_pace.get(host, 0.0), float(rules.crawl_delay(AGENT) or 0) if rules else 0)
-            self._wait_turn(host, delay)
+            if check_robots:  # reading robots.txt itself doesn't count as a visit (a long crawl-delay would hold up the first page)
+                self._wait_turn(host, delay)
             with self.http.stream("GET", url, headers=headers or None) as r:
                 peer = (r.extensions.get("network_stream").get_extra_info("server_addr") if r.extensions.get("network_stream") else None)
                 if peer:  # the address really connected to, in case the name resolved differently a moment later
@@ -145,8 +151,8 @@ class Fetcher:
             try:
                 page = self._get(url, headers=headers)
             except (httpx.TransportError,) as exc:
-                if attempt == retries:
-                    raise Blocked(f"The site didn't answer ({type(exc).__name__}).") from exc
+                if attempt >= min(retries, 1) or isinstance(exc, httpx.ReadTimeout):  # silent sites: one more try at most; a stalled one goes to the browser
+                    raise Refused(f"The site didn't answer ({type(exc).__name__}).") from exc
                 self.sleep(2 ** attempt)
                 continue
             if page.status not in RETRY_STATUS or attempt == retries:
@@ -157,5 +163,5 @@ class Fetcher:
         if page.status in (401, 407):
             raise Blocked("The page asks for a login.")
         if page.status in (402,) or page.status in (403, 429, 503) and any(m in low for m in BLOCK_MARKERS):
-            raise Blocked("The page is protected (a captcha, a robot check or a paywall), so XeryusCrawl leaves it.")
+            raise Refused("The page is protected (a captcha, a robot check or a paywall), so XeryusCrawl leaves it.")
         return page

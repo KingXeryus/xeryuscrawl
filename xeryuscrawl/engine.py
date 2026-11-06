@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 import httpx
 
 from . import config, documents, extract, filters, markdown, pageinfo
-from .fetch import Blocked, Fetcher
+from .fetch import BLOCK_MARKERS, Blocked, Fetcher, Refused
 
 FORMATS = {"markdown", "fit_markdown", "html", "rawHtml", "links", "media", "tables", "citations", "screenshot", "pdf", "json", "chunks",
            "summary", "branding", "changeTracking"}
@@ -106,7 +106,15 @@ class Engine:
             raise Blocked("Only web addresses, raw: text and files in XeryusCrawl's folder can be read.")
         if render == "always" or want_browser:
             return self._browser(url, browser)
-        page = self.fetcher.get(url, headers=headers or None)
+        try:
+            page = self.fetcher.get(url, headers=headers or None)
+        except Refused:
+            if render == "never":
+                raise
+            text, final, status, kind, extras = self._browser(url, browser)  # turned away or timed out: try an ordinary browser
+            if status in (401, 402, 403, 429, 503) and any(m in text[:20000].lower() for m in BLOCK_MARKERS):
+                raise Blocked("The page is protected (a captcha, a robot check or a paywall), so XeryusCrawl leaves it.")
+            return text, final, status, kind, extras
         kind = documents.kind_of(page.url, page.content_type, page.text, page.raw)
         if kind == "html" and render == "auto" and self._needs_js(page.text):
             return self._browser(url, browser)
