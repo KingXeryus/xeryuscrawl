@@ -4,13 +4,16 @@ import json
 import secrets
 import threading
 import time
+
+import httpx
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 
 class Jobs:
-    def __init__(self, root: Path, crawler, workers: int = 2, clock=time.time):
+    def __init__(self, root: Path, crawler, workers: int = 2, clock=time.time, http=None):
         self.root, self.crawler, self.clock = root, crawler, clock
+        self.http = http or httpx.Client()
         self.root.mkdir(parents=True, exist_ok=True)
         self.pool = ThreadPoolExecutor(workers)
         self.stop_flags: dict[str, threading.Event] = {}
@@ -42,14 +45,33 @@ class Jobs:
         self.pool.submit(self._run, job, kind, params)
         return job
 
+    def _hook(self, hook: dict | None, job: str, event: str, data=None) -> None:
+        """Webhook: POST {"id", "type": "<kind>.<event>", "data"} to the caller's address, for the events it asked for
+        (started, page, completed, failed). A webhook that fails never stops the job."""
+        if not hook or event not in hook.get("events", ["started", "page", "completed", "failed"]):
+            return
+        try:
+            self.http.post(hook["url"], json={"id": job, "type": f"{hook.get('kind', 'crawl')}.{event}", "data": data,
+                                              "metadata": hook.get("metadata")}, headers=hook.get("headers") or {}, timeout=15)
+        except Exception:  # noqa: BLE001
+            pass
+
     def _run(self, job: str, kind: str, params: dict) -> None:
         flag = self.stop_flags[job]
         count = {"n": 0}
+        params = dict(params)
+        hook = params.pop("webhook", None)
+        if isinstance(hook, str):
+            hook = {"url": hook}
+        if hook:
+            hook = hook | {"kind": kind}
+        self._hook(hook, job, "started")
 
         def on_page(doc):
             count["n"] += 1
             self._page(job, doc)
             self._save(job, done=count["n"])
+            self._hook(hook, job, "page", [doc])
         try:
             if kind == "crawl":
                 state_file = self._dir(job) / "state.json"
@@ -59,13 +81,16 @@ class Jobs:
                 out = self.crawler.crawl(url, state=state, save=lambda st: state_file.write_text(json.dumps(st), encoding="utf-8"),
                                          on_page=on_page, should_stop=flag.is_set, **p)
                 self._save(job, state="stopped" if out["stopped"] == "stopped" else "done", why=out["stopped"], finished=self.clock())
+                self._hook(hook, job, "completed", {"pages": count["n"], "why": out["stopped"]})
             else:
                 p = dict(params)
                 urls = p.pop("urls")
                 self.crawler.batch(urls, on_page=on_page, should_stop=flag.is_set, **p)
                 self._save(job, state="stopped" if flag.is_set() else "done", finished=self.clock())
+                self._hook(hook, job, "completed", {"pages": count["n"]})
         except Exception as exc:  # noqa: BLE001 - the caller sees why
             self._save(job, state="failed", why=str(exc)[:300], finished=self.clock())
+            self._hook(hook, job, "failed", {"error": str(exc)[:300]})
 
     def status(self, job: str, skip: int = 0, limit: int = 50) -> dict:
         d = self._dir(job)

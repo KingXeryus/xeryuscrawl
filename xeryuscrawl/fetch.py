@@ -1,6 +1,7 @@
 """Fetching one page safely. Every hop of a redirect is checked against the home-network rule before it is fetched, and
 the address actually connected to is checked again; robots.txt and a per-site pace are kept by default. A page that asks for
 a login, a captcha or a paywall comes back as blocked."""
+import re
 import threading
 import time
 import urllib.robotparser
@@ -14,6 +15,32 @@ from .guard import BrowserError, check_url
 
 AGENT = config.AGENT
 MAX_BYTES = 5_000_000
+MAX_DOC_BYTES = 40_000_000  # PDFs and office files can be big
+DOC_TYPES = ("pdf", "officedocument", "msword", "ms-excel", "ms-powerpoint", "opendocument")
+RETRY_STATUS = (429, 500, 502, 503, 504)
+_META_CHARSET = re.compile(rb"""<meta[^>]+charset=["']?([\w-]+)""", re.I)
+
+
+def decode(body: bytes, content_type: str = "") -> str:
+    """Text in the page's own encoding: a byte-order mark, the server's charset, the page's <meta charset>, then UTF-8,
+    then Windows-1252 (what browsers assume)."""
+    for bom, enc in ((bytes([0xEF, 0xBB, 0xBF]), "utf-8"), (bytes([0xFF, 0xFE]), "utf-16-le"), (bytes([0xFE, 0xFF]), "utf-16-be")):
+        if body.startswith(bom):
+            return body[len(bom):].decode(enc, errors="replace")
+    m = re.search(r"charset=([\w-]+)", content_type, re.I)
+    sniff = _META_CHARSET.search(body[:4096])
+    for enc in [m.group(1) if m else None, sniff.group(1).decode("ascii", "ignore") if sniff else None]:
+        if enc:
+            try:
+                return body.decode(enc)
+            except (LookupError, UnicodeDecodeError):
+                pass
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError:
+        return body.decode("cp1252", errors="replace")
+
+
 MAX_HOPS = 5
 BLOCK_MARKERS = ("captcha", "cf-challenge", "challenge-platform", "are you a robot", "verify you are human", "access denied")
 
@@ -30,6 +57,7 @@ class Page:
     text: str
     hops: list = field(default_factory=list)
     raw: bytes = b""
+    retry_after: str = ""
 
 
 class Fetcher:
@@ -37,6 +65,7 @@ class Fetcher:
         self.http = http or httpx.Client(timeout=30, headers={"User-Agent": AGENT}, follow_redirects=False)
         self.guard, self.pace, self.robots, self.clock, self.sleep = guard, pace, robots, clock, sleep
         self._robots: dict[str, urllib.robotparser.RobotFileParser | None] = {}
+        self.host_pace: dict[str, float] = {}  # a crawl's own delay for one site
         self._last: dict[str, float] = {}
         self._lock = threading.Lock()
 
@@ -78,7 +107,7 @@ class Fetcher:
         rules = self._rules(url)
         return rules is None or rules.can_fetch(AGENT, url)
 
-    def _get(self, url: str, check_robots: bool = True) -> Page:
+    def _get(self, url: str, check_robots: bool = True, headers: dict | None = None) -> Page:
         hops = []
         for _ in range(MAX_HOPS + 1):
             self._check(url)
@@ -86,9 +115,9 @@ class Fetcher:
                 raise Blocked("The site's robots.txt asks crawlers not to read this page.")
             host = urlparse(url).netloc
             rules = self._robots.get(f"{urlparse(url).scheme}://{host}") if check_robots else None
-            delay = max(self.pace, float(rules.crawl_delay(AGENT) or 0) if rules else 0)
+            delay = max(self.pace, self.host_pace.get(host, 0.0), float(rules.crawl_delay(AGENT) or 0) if rules else 0)
             self._wait_turn(host, delay)
-            with self.http.stream("GET", url) as r:
+            with self.http.stream("GET", url, headers=headers or None) as r:
                 peer = (r.extensions.get("network_stream").get_extra_info("server_addr") if r.extensions.get("network_stream") else None)
                 if peer:  # the address really connected to, in case the name resolved differently a moment later
                     self._check(f"http://{peer[0]}/" if ":" not in peer[0] else f"http://[{peer[0]}]/")
@@ -96,17 +125,34 @@ class Fetcher:
                     hops.append(url)
                     url = urljoin(url, r.headers["location"])
                     continue
-                body = b""
+                ctype = r.headers.get("content-type", "")
+                limit = MAX_DOC_BYTES if any(k in ctype.lower() for k in DOC_TYPES) else MAX_BYTES
+                chunks, size = [], 0
                 for chunk in r.iter_bytes():
-                    body += chunk
-                    if len(body) > MAX_BYTES:
+                    chunks.append(chunk)
+                    size += len(chunk)
+                    if size > limit:
                         break
-                text = body[:MAX_BYTES].decode(r.encoding or "utf-8", errors="replace")
-                return Page(url=str(r.url), status=r.status_code, content_type=r.headers.get("content-type", ""), text=text, hops=hops, raw=body[:MAX_BYTES])
+                body = b"".join(chunks)[:limit]
+                return Page(url=str(r.url), status=r.status_code, content_type=ctype, text=decode(body, ctype), hops=hops, raw=body,
+                            retry_after=r.headers.get("retry-after", ""))
         raise Blocked("The page redirects too many times.")
 
-    def get(self, url: str) -> Page:
-        page = self._get(url)
+    def get(self, url: str, retries: int = 3, headers: dict | None = None) -> Page:
+        """With retries when the site is busy (429 and 5xx, and dropped connections), waiting as long as it asks (up to 30 s)
+        or 1, 2, 4 seconds."""
+        for attempt in range(retries + 1):
+            try:
+                page = self._get(url, headers=headers)
+            except (httpx.TransportError,) as exc:
+                if attempt == retries:
+                    raise Blocked(f"The site didn't answer ({type(exc).__name__}).") from exc
+                self.sleep(2 ** attempt)
+                continue
+            if page.status not in RETRY_STATUS or attempt == retries:
+                break
+            wait = float(page.retry_after) if page.retry_after.strip().isdigit() else 2 ** attempt
+            self.sleep(min(wait, 30))
         low = page.text[:20000].lower()
         if page.status in (401, 407):
             raise Blocked("The page asks for a login.")

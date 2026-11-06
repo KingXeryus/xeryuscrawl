@@ -1,6 +1,6 @@
 [project]
 name = "xeryuscrawl"
-version = "0.1.0"
+version = "0.2.0"
 description = "A local web crawler and deep-research tool for coding agents (MCP) and scripts (REST): pages to clean Markdown, site maps and crawls, data extraction, and research with numbered sources."
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -12,10 +12,11 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "mcp>=2.3,<3",
+    "pypdf>=6,<7",
 ]
 
 [project.scripts]
-xeryuscrawl = "xeryuscrawl.serve:main"
+xeryuscrawl = "xeryuscrawl.cli:main"
 xeryuscrawl-mcp = "xeryuscrawl.mcp_server:main"
 
 [project.optional-dependencies]

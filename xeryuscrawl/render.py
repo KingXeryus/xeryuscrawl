@@ -22,7 +22,7 @@ from .guard import BrowserError, check_url
 
 from . import config
 LOCK = threading.Semaphore(2)  # at most two pages open at once
-ACTIONS = {"wait", "click", "scroll", "type", "press", "javascript", "wait_for"}
+ACTIONS = {"wait", "click", "scroll", "type", "press", "javascript", "wait_for", "screenshot", "scrape"}
 SESSION = re.compile(r"^[a-z0-9-]{1,40}$")
 AGENT = config.AGENT
 
@@ -30,7 +30,7 @@ AGENT = config.AGENT
 def render(url: str, guard=check_url, wait_ms: int = 1000, screenshot: bool = False, full_page: bool = False, pdf: bool = False,
            actions: list | None = None, js_code: list | None = None, wait_for: str | None = None, scan_full_page: bool = False,
            headers: dict | None = None, viewport: dict | None = None, session: str | None = None, sessions: Path | None = None,
-           stealth: bool = False, timeout_ms: int = 30000) -> dict:
+           stealth: bool = False, locale: str | None = None, mobile: bool = False, timeout_ms: int = 30000) -> dict:
     """{"html", "url", "status", "screenshot"?, "pdf"?, "js_results"?}. Actions: {"type": "wait", "milliseconds"},
     {"type": "click", "selector"}, {"type": "scroll", "direction"}, {"type": "type", "selector", "text"}, {"type": "press", "key"},
     {"type": "javascript", "script"}, {"type": "wait_for", "selector"}. A session id keeps cookies and storage between calls."""
@@ -59,8 +59,11 @@ def render(url: str, guard=check_url, wait_ms: int = 1000, screenshot: bool = Fa
     with LOCK, sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True, args=["--disable-blink-features=AutomationControlled"] if stealth else [])
         try:
-            ctx = browser.new_context(user_agent=STEALTH_UA if stealth else AGENT, locale="en-CA" if stealth else None, accept_downloads=False, service_workers="block",
-                                      viewport={"width": int((viewport or {}).get("width", 1280)), "height": int((viewport or {}).get("height", 900))},
+            phone = dict(pw.devices["Pixel 7"]) if mobile else {}
+            phone.pop("default_browser_type", None)
+            size = {"viewport": {"width": int((viewport or {}).get("width", 1280)), "height": int((viewport or {}).get("height", 900))}}
+            ctx = browser.new_context(**(phone or size), **({} if mobile else {"user_agent": STEALTH_UA if stealth else AGENT}),
+                                      locale=locale or ("en-CA" if stealth else None), accept_downloads=False, service_workers="block",
                                       extra_http_headers={str(k): str(v) for k, v in (headers or {}).items()},
                                       storage_state=str(state) if state and state.is_file() else None)
             ctx.route("**/*", gate)
@@ -78,6 +81,7 @@ def render(url: str, guard=check_url, wait_ms: int = 1000, screenshot: bool = Fa
                 page.wait_for_selector(wait_for, timeout=min(timeout_ms, 15000))
             page.wait_for_timeout(min(wait_ms, 10000))
             results = [page.evaluate(code) for code in (js_code or [])[:10]]
+            snaps: list = []
             for a in (actions or [])[:30]:
                 kind = a.get("type")
                 if kind not in ACTIONS:
@@ -96,6 +100,10 @@ def render(url: str, guard=check_url, wait_ms: int = 1000, screenshot: bool = Fa
                     results.append(page.evaluate(str(a["script"])))
                 elif kind == "wait_for":
                     page.wait_for_selector(str(a["selector"]), timeout=10000)
+                elif kind == "screenshot":  # a picture at this point of the actions
+                    snaps.append({"screenshot": "data:image/png;base64," + base64.b64encode(page.screenshot(full_page=bool(a.get("full_page")))).decode()})
+                elif kind == "scrape":  # the page's HTML at this point of the actions
+                    snaps.append({"url": page.url, "html": page.content()})
                 page.wait_for_timeout(300)
             if scan_full_page:  # scroll to the bottom until the page stops growing: infinite scroll and lazy images
                 last = 0
@@ -109,6 +117,8 @@ def render(url: str, guard=check_url, wait_ms: int = 1000, screenshot: bool = Fa
             out = {"html": page.content(), "url": page.url, "status": resp.status if resp else 200}
             if out["url"] != url:
                 guard(out["url"])  # where the page ended up after its own scripts moved it
+            if snaps:
+                out["action_results"] = snaps
             if results:
                 out["js_results"] = json.loads(json.dumps(results, default=str))
             if screenshot:

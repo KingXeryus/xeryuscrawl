@@ -21,10 +21,14 @@ from .smart import Smart, search
 # camelCase spellings accepted for the same options
 ALIASES = {"onlyMainContent": "only_main", "maxAge": "max_age", "waitFor": "wait_for", "jsCode": "js_code", "scanFullPage": "scan_full_page",
            "fullPage": "full_page", "maxDepth": "max_depth", "includePaths": "include_paths", "excludePaths": "exclude_paths",
-           "allowExternalLinks": "allow_external", "includeSubdomains": "include_subdomains", "cssSchema": "css_schema", "xpathSchema": "xpath_schema"}
+           "allowExternalLinks": "allow_external", "includeSubdomains": "include_subdomains", "cssSchema": "css_schema", "xpathSchema": "xpath_schema",
+           "includeTags": "include_tags", "excludeTags": "exclude_tags", "crawlEntireDomain": "entire_domain", "ignoreQueryParameters": "ignore_query",
+           "maxConcurrency": "workers", "enableWebSearch": "web_search", "timeRange": "time_range"}
 SCRAPE_KEYS = {"formats", "only_main", "query", "render", "max_age", "store", "schema", "prompt", "css_schema", "xpath_schema", "patterns",
-               "chunking", "wait_for", "wait_ms", "actions", "js_code", "scan_full_page", "headers", "viewport", "session", "full_page", "stealth", "timeout_ms"}
-CRAWL_KEYS = {"url", "strategy", "limit", "max_depth", "include_paths", "exclude_paths", "keywords", "include_subdomains", "allow_external", "query", "confidence"}
+               "chunking", "wait_for", "wait_ms", "actions", "js_code", "scan_full_page", "headers", "viewport", "session", "full_page", "stealth", "timeout_ms",
+               "include_tags", "exclude_tags", "location", "mobile"}
+CRAWL_KEYS = {"url", "strategy", "limit", "max_depth", "include_paths", "exclude_paths", "keywords", "include_subdomains", "allow_external", "query",
+              "confidence", "entire_domain", "ignore_query", "workers", "delay", "webhook"}
 
 
 def opts(body: dict, keys: set) -> dict:
@@ -82,7 +86,8 @@ def build_app(engine: Engine, secret: str) -> FastAPI:
     @app.post("/v2/map", dependencies=d)
     def site_map(body: dict):
         o = {ALIASES.get(k, k): v for k, v in body.items()}
-        return {"success": True, "links": crawler.map(o.pop("url"), **{k: o[k] for k in ("search", "limit", "include_subdomains", "sitemap", "common_crawl") if k in o})}
+        return {"success": True, "links": crawler.map(o.pop("url"), **{k: o[k] for k in ("search", "limit", "include_subdomains", "sitemap", "common_crawl",
+                                                                                       "feeds", "ignore_query") if k in o})}
 
     @app.post("/v2/subdomains", dependencies=d)
     def subdomains(body: dict):
@@ -99,7 +104,7 @@ def build_app(engine: Engine, secret: str) -> FastAPI:
         urls = body.pop("urls", [])
         if not urls or len(urls) > 10000:
             raise HTTPException(400, "give between 1 and 10,000 addresses")
-        return {"success": True, "id": jobs.start("batch", {"urls": urls} | opts(body, SCRAPE_KEYS | {"workers"}))}
+        return {"success": True, "id": jobs.start("batch", {"urls": urls} | opts(body, SCRAPE_KEYS | {"workers", "webhook"}))}
 
     for kind in ("crawl", "batch/scrape"):
         @app.get(f"/v2/{kind}/{{job}}", dependencies=d)
@@ -123,7 +128,9 @@ def build_app(engine: Engine, secret: str) -> FastAPI:
 
     @app.post("/v2/search", dependencies=d)
     def web_search(body: dict):
-        hits = search(body["query"], int(body.get("limit", 5)), categories=body.get("categories"))
+        b = {ALIASES.get(k, k): v for k, v in body.items()}
+        cats = b.get("categories") or next((s for s in b.get("sources", []) if s in ("news", "images")), None)
+        hits = search(b["query"], int(b.get("limit", 5)), categories=cats, time_range=b.get("time_range"), language=b.get("language"))
         so = body.get("scrapeOptions")
         if so:
             docs = crawler.batch([h["url"] for h in hits], **opts(dict(so), SCRAPE_KEYS))
@@ -133,7 +140,12 @@ def build_app(engine: Engine, secret: str) -> FastAPI:
 
     @app.post("/v2/extract", dependencies=d)
     def ai_extract(body: dict):
-        return {"success": True, "data": smart.ask(body.get("prompt"), body["urls"], body.get("schema"))}
+        b = {ALIASES.get(k, k): v for k, v in body.items()}
+        return {"success": True, "data": smart.ask(b.get("prompt"), b.get("urls", []), b.get("schema"), bool(b.get("web_search")))}
+
+    @app.post("/v2/agent", dependencies=d)
+    def agent(body: dict):
+        return {"success": True, "data": smart.agent(body["prompt"], body.get("urls"), body.get("schema"), int(body.get("max_pages", 25)))}
 
     @app.post("/v2/ask", dependencies=d)
     def ask(body: dict):
