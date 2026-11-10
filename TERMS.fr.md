@@ -25,12 +25,16 @@ protection des renseignements personnels : support@mymak.ai.
 
 **Ce qui est partagé.** Lorsque vous lancez une recherche approfondie, les passages Web publics qu'elle trouve : le texte de
 chaque passage, son adresse Web et le titre de la page. Avant toute conservation, les adresses courriel, numéros de téléphone,
-longs numéros et ce qui ressemble à des clés sont masqués. Un identifiant d'installation aléatoire les accompagne; myMAK.ai
-n'en conserve qu'une empreinte à sens unique, servant à appliquer des limites quotidiennes.
+longs numéros et ce qui ressemble à des clés sont masqués. Seuls les passages provenant d'une liste de sources publiques
+fiables (comme Wikipédia, des encyclopédies, des revues scientifiques et des sites gouvernementaux et universitaires) sont
+acceptés; les autres sont refusés et ne sont pas conservés. Un identifiant d'installation aléatoire les accompagne; myMAK.ai
+n'en conserve qu'une empreinte à sens unique.
 
 **Ce qui n'est jamais partagé.** Vos questions, recherches et réponses, vos clés d'API, vos fichiers, les pages que vous lisez
-hors de la recherche approfondie, et tout autre contenu de votre ordinateur. myMAK.ai ne conserve pas votre adresse IP avec ce
-que vous partagez.
+hors de la recherche approfondie, et tout autre contenu de votre ordinateur. myMAK.ai ne conserve pas votre adresse IP. Pour
+appliquer une limite quotidienne de partage, il conserve un code protégé à sens unique, calculé à partir de votre adresse IP
+avec une clé secrète (une empreinte à clé), qui ne permet pas de retrouver l'adresse. Il est supprimé avec les passages, dans
+un délai de 30 jours.
 
 **Pourquoi.** Pour entraîner et améliorer des modèles d'IA de myMAK.ai, qui peuvent servir dans ses produits, y compris des
 produits payants. Le fondement juridique est votre consentement, que vous pouvez retirer en tout temps.
@@ -52,4 +56,4 @@ demande envoyée à support@mymak.ai.
 Si ces conditions changent, la nouvelle version est publiée ici avec sa date. Tout changement à ce qui est partagé ou à la
 raison du partage vous sera demandé de nouveau avant de s'appliquer.
 
-Version 1, 2026-11-06.
+Version 2, 2026-11-09 : sources fiables seulement; un code protégé à sens unique de l'adresse IP conservé pour la limite quotidienne.

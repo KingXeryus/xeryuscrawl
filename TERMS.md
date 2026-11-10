@@ -22,10 +22,14 @@ support@mymak.ai.
 
 **What is shared.** When you run deep research, the public web passages it finds: the text of each passage, its web address
 and page title. Before anything is kept, email addresses, phone numbers, long numbers and things that look like keys are
-blanked. A random install id is sent with them; myMAK.ai stores only a one-way hash of it, used to apply daily limits.
+blanked. Only passages from a list of trusted public sources (such as Wikipedia, encyclopedias, science journals and
+government and university sites) are accepted; others are refused and not kept. A random install id is sent with them;
+myMAK.ai stores only a one-way hash of it.
 
 **What is never shared.** Your questions, searches and answers, your API keys, your files, the pages you scrape outside deep
-research, and anything else on your computer. myMAK.ai doesn't store your IP address with what you share.
+research, and anything else on your computer. myMAK.ai doesn't store your IP address. To apply a daily limit on sharing, it
+keeps a protected one-way code made from your IP address with a secret key (a keyed hash), which can't be turned back into
+the address. It is deleted with the passages, within 30 days.
 
 **Why.** To train and improve AI models made by myMAK.ai, which may be used in its products, including paid ones. The legal
 basis is your consent, which you can withdraw at any time.
@@ -45,4 +49,4 @@ to support@mymak.ai.
 If these terms change, the new version is published here with its date. A change to what is shared or why will ask you
 again before it applies.
 
-Version 1, 2026-11-06.
+Version 2, 2026-11-09: trusted sources only; a protected one-way code of the IP address kept for the daily limit.
